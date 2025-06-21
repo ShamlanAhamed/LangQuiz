@@ -1,8 +1,12 @@
 import React, { useState } from 'react';
-import { View, TextInput, Button, Text, StyleSheet, TouchableOpacity } from 'react-native';
+import { View, TextInput, Text, TouchableOpacity, Alert } from 'react-native';
 import { Formik } from 'formik';
 import * as Yup from 'yup';
 import RolePicker from '../components/RolePicker';
+import styles from '../styles/loginStyles';
+import API from '../api/axios';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import { useNavigation } from '@react-navigation/native';
 
 const LoginSchema = Yup.object().shape({
   email: Yup.string().email('Invalid email').required('Required'),
@@ -10,19 +14,32 @@ const LoginSchema = Yup.object().shape({
   role: Yup.string().required('Select a role'),
 });
 
-const LoginScreen = ({ navigation }) => {
+const LoginScreen = () => {
   const [error, setError] = useState('');
+  const navigation = useNavigation();
 
-  const handleLogin = (values) => {
-    const { email, password, role } = values;
+  const handleLogin = async (values) => {
+    try {
+      const res = await API.post('/auth/login', {
+        email: values.email,
+        password: values.password,
+      });
 
-    // Mock validation (replace with API call)
-    if (email === 'admin@test.com' && password === '1234' && role === 'Admin') {
-      navigation.navigate('Home', { role });
-    } else if (role === 'Staff' || role === 'User') {
-      navigation.navigate('Home', { role });
-    } else {
-      setError('Invalid credentials or role');
+      const { token, user } = res.data;
+
+      // Role validation match
+      if (user.role !== values.role.toLowerCase()) {
+        setError('Selected role does not match account role.');
+        return;
+      }
+
+      await AsyncStorage.setItem('token', token);
+      await AsyncStorage.setItem('user', JSON.stringify(user));
+
+      navigation.navigate('Home', { role: user.role });
+    } catch (err) {
+      console.error(err);
+      setError(err.response?.data?.msg || 'Login failed');
     }
   };
 
@@ -70,14 +87,5 @@ const LoginScreen = ({ navigation }) => {
     </View>
   );
 };
-
-const styles = StyleSheet.create({
-  container: { padding: 20, flex: 1, justifyContent: 'center' },
-  title: { fontSize: 24, textAlign: 'center', marginBottom: 20 },
-  input: { borderWidth: 1, padding: 10, marginBottom: 10, borderRadius: 6 },
-  error: { color: 'red', marginBottom: 10 },
-  button: { backgroundColor: '#007bff', padding: 12, borderRadius: 6, alignItems: 'center' },
-  buttonText: { color: '#fff', fontWeight: 'bold' },
-});
 
 export default LoginScreen;
